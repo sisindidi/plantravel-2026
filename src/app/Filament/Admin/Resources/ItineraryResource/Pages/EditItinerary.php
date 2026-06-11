@@ -18,45 +18,43 @@ class EditItinerary extends EditRecord
         ];
     }
 
-    // MEMBUAT DATA MUNCUL LAGI PAS EDIT: Tarik flat data DB, pecah jadi bentuk array nested form
     protected function mutateFormDataBeforeFill(array $data): array
-    {
-        $tripId = $this->record->trip_id;
-        $data['trip_id'] = $tripId;
+{
+    $tripId = $this->record->trip_id;
+    $data['trip_id'] = $tripId;
 
-        $allItineraries = Itinerary::where('trip_id', $tripId)
-            ->orderBy('day_number', 'asc')
-            ->orderBy('start_time', 'asc')
-            ->get();
+    $allItineraries = Itinerary::where('trip_id', $tripId)
+        ->orderBy('day_number', 'asc')
+        ->orderBy('start_time', 'asc')
+        ->get();
 
-        $grouped = [];
-        foreach ($allItineraries as $iti) {
-            $grouped[$iti->day_number][] = [
-                'start_time' => $iti->start_time,
-                'activity' => $iti->activity,
-                'notes' => $iti->notes,
-            ];
-        }
-
-        $itinerariesByDay = [];
-        foreach ($grouped as $dayNum => $activities) {
-            $itinerariesByDay[] = [
-                'day_number' => $dayNum,
-                'activities_list' => $activities,
-            ];
-        }
-
-        $data['itineraries_by_day'] = $itinerariesByDay;
-
-        return $data;
+    $grouped = [];
+    foreach ($allItineraries as $iti) {
+        $grouped[$iti->day_number][] = [
+            'start_time' => $iti->start_time,
+            // FIX SAKTI: Paksa dikasih (string) biar Filament V3 ngenalin datanya dan langsung ngetem!
+            'destination_id' => $iti->destination_id ? (string) $iti->destination_id : null, 
+            'activity' => $iti->activity,
+            'notes' => $iti->notes,
+        ];
     }
 
-    // UPDATE LOGIC: Bersihkan rundown lama di trip ini, lalu timpa dengan isian form editan baru
+    $itinerariesByDay = [];
+    foreach ($grouped as $dayNum => $activities) {
+        $itinerariesByDay[] = [
+            'day_number' => $dayNum,
+            'activities_list' => $activities,
+        ];
+    }
+
+    $data['itineraries_by_day'] = $itinerariesByDay;
+
+    return $data;
+}
     protected function handleRecordUpdate(\Illuminate\Database\Eloquent\Model $record, array $data): \Illuminate\Database\Eloquent\Model
     {
-        $tripId = $data['trip_id'];
+        $tripId = $record->trip_id;
 
-        // Hapus massal data lama biar tidak menggulung duplikat
         Itinerary::where('trip_id', $tripId)->delete();
 
         $firstRecord = null;
@@ -69,7 +67,8 @@ class EditItinerary extends EditRecord
                     'trip_id' => $tripId,
                     'day_number' => $dayNumber,
                     'start_time' => $activityData['start_time'],
-                    'activity' => $activityData['activity'],
+                    'destination_id' => $activityData['destination_id'] ?? null,
+                    'activity' => $activityData['activity'] ?? '-', 
                     'notes' => $activityData['notes'] ?? null,
                 ]);
 

@@ -4,12 +4,14 @@ namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\DestinationResource\Pages;
 use App\Models\Destination;
+use App\Models\Trip;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Forms\Components\Select; // <-- IMPORT HARUS DI SINI (DI ATAS)
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class DestinationResource extends Resource
 {
@@ -20,19 +22,31 @@ class DestinationResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Forms\Components\Section::make('Data Destinasi')
+            Forms\Components\Section::make('Rencana Destinasi Trip')
+                ->description('Pilih 1 trip utama Anda dan input daftar tempat wisata yang dikunjungi.')
                 ->schema([
-                    Select::make('trip_id')
-                        ->label('Pilih Rencana Trip')
-                        ->relationship('trip', 'title')
-                        ->required()
+                    
+                    // User milih 1 trip utama di luar repeater
+                    Forms\Components\Select::make('trip_id')
+                        ->label('Pilih Rencana Trip Utama')
+                        ->options(fn () => Trip::where('user_id', Auth::id())->pluck('title', 'id'))
                         ->searchable()
-                        ->preload(),
-                    Forms\Components\TextInput::make('name')
-                        ->label('Nama Destinasi')
-                        ->required(),
-                    Forms\Components\DatePicker::make('visit_date')
-                        ->label('Tanggal Kunjungan'),
+                        ->preload()
+                        ->required()
+                        ->disabled(fn (string $context): bool => $context === 'edit'),
+
+                    // REPEATER: Cuma input nama tempat murni tanpa diganggu datepicker
+                    Forms\Components\Repeater::make('destinations_repeater')
+                        ->label('Daftar Tempat Wisata / Objek Destinasi')
+                        ->schema([
+                            Forms\Components\TextInput::make('name')
+                                ->label('Nama Tempat Wisata')
+                                ->placeholder('Contoh: Gunung Fuji, Disneyland, Tokyo Tower')
+                                ->required()
+                                ->columnSpanFull(),
+                        ])
+                        ->addActionLabel('Tambah Destinasi Baru (+)')
+                        ->columnSpanFull(),
                 ])
         ]);
     }
@@ -40,10 +54,19 @@ class DestinationResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->columns([
-            Tables\Columns\TextColumn::make('trip.title')->label('Nama Trip')->searchable(),
-            Tables\Columns\TextColumn::make('name')->label('Destinasi')->searchable(),
-            Tables\Columns\TextColumn::make('visit_date')->date('d M Y'),
+            Tables\Columns\TextColumn::make('trip.title')
+                ->label('Nama Trip')
+                ->searchable(),
+            Tables\Columns\TextColumn::make('name')
+                ->label('Destinasi')
+                ->searchable(),
         ])
+        ->groups([
+            Tables\Grouping\Group::make('trip.title')
+                ->label('Rencana Trip')
+                ->collapsible(),
+        ])
+        ->defaultGroup('trip.title')
         ->actions([
             Tables\Actions\EditAction::make(),
             Tables\Actions\DeleteAction::make(),
@@ -57,5 +80,13 @@ class DestinationResource extends Resource
             'create' => Pages\CreateDestination::route('/create'),
             'edit' => Pages\EditDestination::route('/{record}/edit'),
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->whereHas('trip', function ($query) {
+                $query->where('user_id', Auth::id());
+            });
     }
 }

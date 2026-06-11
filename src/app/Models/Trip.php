@@ -26,4 +26,12 @@ class Trip extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    protected $guarded = [];
+
+    
+    public function packingLists(): HasMany
+    {
+        return $this->hasMany(Packinglist::class, 'trip_id');
+    }
 }

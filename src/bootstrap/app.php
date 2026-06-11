@@ -13,7 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__ . '/../routes/api.php',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
+        $middleware->validateCsrfTokens(except: [
+            '/login',
+            '/logout',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

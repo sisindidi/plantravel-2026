@@ -5,8 +5,10 @@ namespace App\Filament\Admin\Resources;
 use App\Filament\Admin\Resources\ItineraryResource\Pages;
 use App\Models\Itinerary;
 use App\Models\Trip;
+use App\Models\Destination; 
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Forms\Get; 
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -16,9 +18,7 @@ use Illuminate\Support\Facades\Auth;
 class ItineraryResource extends Resource
 {
     protected static ?string $model = Itinerary::class;
-
     protected static ?string $navigationIcon = 'heroicon-o-clock'; 
-
     protected static ?string $navigationLabel = 'Jadwal Perjalanan';
 
     public static function form(Form $form): Form
@@ -29,13 +29,16 @@ class ItineraryResource extends Resource
                     ->schema([
                         Forms\Components\Select::make('trip_id')
                             ->label('Rencana Trip')
-                            ->options(fn () => \App\Models\Trip::where('user_id', Auth::id())->pluck('title', 'id'))
+                            ->options(fn () => Trip::where('user_id', Auth::id())->pluck('title', 'id'))
                             ->searchable()
-                            ->required(),
+                            ->preload()
+                            ->required()
+                            ->live() // Kunci pemantik data realtime Livewire
+                            ->disabled(fn (string $context): bool => $context === 'edit'), // Kunci pas edit biar ga sengketa trip_id
                     ]),
 
                 Forms\Components\Section::make('Susun Jadwal Harian (Rundown)')
-                    ->description('Lu bisa tambah hari dan isi tempat wisatanya langsung di sini sekaligus!')
+                    ->description('Silakan isi tempat wisata utama dan aktivitas tambahan sesuai kebutuhan Anda.')
                     ->schema([
                         
                         // REPEATER UTAMA: Kelola Hari
@@ -47,11 +50,9 @@ class ItineraryResource extends Resource
                                     ->label('Hari Ke-')
                                     ->numeric()
                                     ->required()
-                                    ->placeholder('Contoh: 1')
-                                    // FIX TYPE HINTING: Menggunakan TextInput $component agar tidak pemicu crash data type & minus
                                     ->default(fn (Forms\Components\TextInput $component) => count($component->getContainer()->getState() ?? []) + 1),
 
-                                
+                                // NESTED REPEATER: Rundown harian
                                 Forms\Components\Repeater::make('activities_list')
                                     ->label('Rencana Kegiatan di Hari Ini')
                                     ->schema([
@@ -59,17 +60,47 @@ class ItineraryResource extends Resource
                                             ->label('Jam')
                                             ->required(),
 
+                                        Forms\Components\Select::make('destination_id')
+    ->label('Tempat Wisata')
+    ->placeholder('Pilih lokasi wisata...')
+    ->options(function (Forms\Components\Select $component) {
+        // Ambil trip_id dari state Livewire terluar
+        $tripId = $component->getLivewire()->data['trip_id'] ?? null;
+
+        // BACKUP RESMI EDIT: Kalau data state kosong (saat load pertama kali), 
+        // ambil dari record model utama yang sedang di-edit di page Livewire tersebut
+        if (!$tripId && isset($component->getLivewire()->record)) {
+            $tripId = $component->getLivewire()->record->trip_id;
+        }
+
+        if (!$tripId) {
+            // JALUR DARURAT: Kalau bener-bener gak ketemu trip_id sama sekali, 
+            // ambil seluruh destinasi milik user yang sedang login saat ini biar tetep muncul label teksnya!
+            return \App\Models\Destination::whereHas('trip', function ($query) {
+                $query->where('user_id', \Illuminate\Support\Facades\Auth::id());
+            })->pluck('name', 'id');
+        }
+
+        return \App\Models\Destination::where('trip_id', $tripId)->pluck('name', 'id');
+    })
+    ->getOptionLabelUsing(fn ($value) => \App\Models\Destination::find($value)?->name) // KUNCI SAKTI: Memaksa Filament nyari nama teks label-nya berdasarkan ID yang tersimpan di DB pas load halaman!
+    ->searchable()
+    ->preload()
+    ->nullable(),
+                                                                                // 2. AKTIVITAS BEBAS (OPSIONAL): Input text bebas
                                         Forms\Components\TextInput::make('activity')
-                                            ->label('Tempat Wisata / Kegiatan')
-                                            ->placeholder('Contoh: Tokyo Tower / Disneyland')
-                                            ->required(),
+                                            ->label('Aktivitas Tambahan')
+                                            ->placeholder('Contoh: Jajan, Kulineran, Check-in, Istirahat')
+                                            ->nullable(),
 
                                         Forms\Components\TextInput::make('notes')
-                                            ->label('Catatan Singkat (Opsional)')
-                                            ->placeholder('Contoh: Beli tiket via Klook'),
+                                            ->label('Catatan Singkat')
+                                            ->placeholder('Contoh: Siapin uang cash / Beli tiket di Klook')
+                                            ->columnSpanFull()
+                                            ->nullable(),
                                     ])
                                     ->columns(3) 
-                                    ->createItemButtonLabel('Tambah Tempat Wisata Baru') 
+                                    ->createItemButtonLabel('Tambah Agenda Baru') 
                                     ->required(),
 
                             ])
@@ -95,9 +126,14 @@ class ItineraryResource extends Resource
                     ->time('H:i')
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('activity')
-                    ->label('Agenda Tempat Wisata')
+                Tables\Columns\TextColumn::make('destination.name')
+                    ->label('Tempat Wisata')
+                    ->placeholder('-')
                     ->searchable(),
+
+                Tables\Columns\TextColumn::make('activity')
+                    ->label('Aktivitas Tambahan')
+                    ->placeholder('-'),
             ])
             ->defaultSort('day_number', 'asc') 
             ->groups([
@@ -106,19 +142,9 @@ class ItineraryResource extends Resource
                     ->collapsible(), 
             ])
             ->defaultGroup('trip.title') 
-            ->filters([
-                Tables\Filters\SelectFilter::make('trip_id')
-                    ->label('Filter Berdasarkan Trip')
-                    ->options(fn () => Trip::where('user_id', Auth::id())->pluck('title', 'id')),
-            ])
             ->actions([
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
             ]);
     }
 

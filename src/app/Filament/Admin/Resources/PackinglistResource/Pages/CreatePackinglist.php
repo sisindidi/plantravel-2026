@@ -11,19 +11,21 @@ class CreatePackinglists extends CreateRecord
     protected static string $resource = PackinglistResource::class;
 
     protected function handleRecordCreation(array $data): \Illuminate\Database\Eloquent\Model
-    {
-        $tripId = $data['trip_id'];
-        $items = $data['packing_details'];
+{
+    $tripId = $data['trip_id'];
+    $items = $data['items_repeater'] ?? [];
+    $firstRecord = null;
 
-        foreach ($items as $item) {
-            Packinglist::create([
-                'trip_id'    => $tripId,
-                'item_name'  => $item['item_name'],
-                'is_checked' => $item['is_checked'] ?? false,
-            ]);
-        }
+    foreach ($items as $item) {
+        $packing = \App\Models\Packinglist::create([
+            'trip_id' => $tripId,
+            'item_name' => $item['item_name'],
+            'is_checked' => $item['is_checked'] ?? false,
+        ]);
 
-        // Return record pertama sebagai referensi
-        return Packinglist::where('trip_id', $tripId)->latest()->first();
+        if (!$firstRecord) { $firstRecord = $packing; }
     }
+
+    return $firstRecord ?? \App\Models\Packinglist::create(['trip_id' => $tripId, 'item_name' => 'Default', 'is_checked' => false]);
+}
 }

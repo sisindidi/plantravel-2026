@@ -23,7 +23,8 @@ class CreateItinerary extends CreateRecord
                     'trip_id' => $tripId,
                     'day_number' => $dayNumber,
                     'start_time' => $activityData['start_time'],
-                    'activity' => $activityData['activity'],
+                    'destination_id' => $activityData['destination_id'] ?? null,
+                    'activity' => $activityData['activity'] ?? '-', 
                     'notes' => $activityData['notes'] ?? null,
                 ]);
 

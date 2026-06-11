@@ -29,6 +29,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // OTOMATIS BERIKAN SEMUA AKSES (Bypass Policy)
+        Gate::before(function ($user, $ability) {
+            return true;
+        });
+
         Gate::policy(Activity::class, ActivityPolicy::class);
         Page::formActionsAlignment(Alignment::Right);
         Notifications::alignment(Alignment::End);

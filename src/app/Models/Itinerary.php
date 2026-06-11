@@ -14,6 +14,7 @@ class Itinerary extends Model
         'trip_id',
         'day_number',
         'start_time',
+        'destination_id',
         'activity',
         'notes',
     ];
@@ -24,6 +25,11 @@ class Itinerary extends Model
     public function trip(): BelongsTo
     {
         return $this->belongsTo(Trip::class);
+    }
+
+    public function destination(): BelongsTo
+    {
+        return $this->belongsTo(Destination::class);
     }
 
     /**

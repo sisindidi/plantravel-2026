@@ -3,11 +3,16 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Packinglist extends Model
 {
-    protected $fillable = ['trip_id', 'item_name', 'is_checked'];
-    protected $casts = ['is_checked' => 'boolean'];
-    
-    public function trip() { return $this->belongsTo(Trip::class); }
+    // Membuka pengisian mass-assignment
+    protected $guarded = [];
+
+    // FIX: Di dalam model anak, relasinya harus belongsTo ke arah Induk (Trip)
+    public function trip(): BelongsTo
+    {
+        return $this->belongsTo(Trip::class, 'trip_id');
+    }
 }
